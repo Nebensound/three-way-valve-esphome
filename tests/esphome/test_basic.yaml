@@ -1,0 +1,46 @@
+substitutions:
+  device_name: test-basic
+  friendly_name: Test Basic
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# External component
+external_components:
+  - source:
+      type: local
+      path: ../../components
+    components: [three_way_valve]
+
+# Stepper motor
+stepper:
+  - platform: a4988
+    id: my_stepper
+    step_pin: GPIO19
+    dir_pin: GPIO18
+    max_speed: 250 steps/s
+    acceleration: 100 steps/s^2
+    deceleration: 100 steps/s^2
+
+# Three-way valve - basic configuration
+valve:
+  - platform: three_way_valve
+    name: "Three Way Valve Basic"
+    id: valve_basic
+    stepper: my_stepper
+    gear_ratio: 4.888888889 # 44/9
+    motor_steps_per_rev: 200
+    ports:
+      supply: 1
+      buffer: 2
+      return: 3

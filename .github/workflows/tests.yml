@@ -1,0 +1,200 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  # Python tests
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Run Python tests
+        run: |
+          pytest tests/ -v --tb=short --ignore=tests/cpp --ignore=tests/esphome
+
+      - name: Run tests with coverage
+        if: matrix.python-version == '3.11'
+        run: |
+          pytest tests/ --cov=components/three_way_valve --cov-report=xml --ignore=tests/cpp --ignore=tests/esphome
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          flags: python
+          name: python-coverage
+
+  # C++ tests
+  cpp-tests:
+    name: C++ Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        build-type: [Debug, Release]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ lcov
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake lcov
+
+      - name: Configure CMake
+        working-directory: tests/cpp
+        run: |
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ..
+
+      - name: Build tests
+        working-directory: tests/cpp/build
+        run: cmake --build . --config ${{ matrix.build-type }}
+
+      - name: Run tests
+        working-directory: tests/cpp/build
+        run: ctest --output-on-failure --build-config ${{ matrix.build-type }}
+
+      - name: Generate coverage (Debug only, Linux)
+        if: matrix.build-type == 'Debug' && runner.os == 'Linux'
+        working-directory: tests/cpp/build
+        run: |
+          lcov --capture --directory . --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' '*/googletest/*' --output-file coverage.info
+          lcov --list coverage.info
+
+      - name: Upload coverage to Codecov
+        if: matrix.build-type == 'Debug' && runner.os == 'Linux'
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./tests/cpp/build/coverage.info
+          flags: cpp
+          name: cpp-coverage
+
+  # ESPHome compile tests
+  esphome-compile-tests:
+    name: ESPHome Compile Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        esphome-version: ["2023.12.0", "2024.6.0", "latest"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ESPHome
+        run: |
+          python -m pip install --upgrade pip
+          if [ "${{ matrix.esphome-version }}" = "latest" ]; then
+            pip install esphome
+          else
+            pip install esphome==${{ matrix.esphome-version }}
+          fi
+
+      - name: Validate test_basic.yaml
+        working-directory: tests/esphome
+        run: esphome config test_basic.yaml
+
+      - name: Validate test_all_features.yaml
+        working-directory: tests/esphome
+        run: esphome config test_all_features.yaml
+
+      - name: Validate test_port_configs.yaml
+        working-directory: tests/esphome
+        run: esphome config test_port_configs.yaml
+
+      - name: Validate test_offsets.yaml
+        working-directory: tests/esphome
+        run: esphome config test_offsets.yaml
+
+      - name: Validate test_actions.yaml
+        working-directory: tests/esphome
+        run: esphome config test_actions.yaml
+
+      - name: Compile test_basic.yaml
+        working-directory: tests/esphome
+        run: esphome compile test_basic.yaml
+
+      - name: Run all compile tests
+        working-directory: tests/esphome
+        run: ./run_compile_tests.sh
+
+  # Code quality checks
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black flake8 pylint
+
+      - name: Check code formatting with black
+        run: |
+          black --check components/three_way_valve/ tests/*.py
+
+      - name: Lint with flake8
+        run: |
+          flake8 components/three_way_valve/ tests/*.py --max-line-length=100 --ignore=E203,W503
+        continue-on-error: true
+
+      - name: Lint with pylint
+        run: |
+          pylint components/three_way_valve/ tests/*.py --disable=C0111,R0913,R0914
+        continue-on-error: true
+
+  # All tests passed
+  all-tests:
+    name: All Tests Passed
+    needs: [python-tests, cpp-tests, esphome-compile-tests]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: All tests passed
+        run: echo "✅ All tests passed successfully!"

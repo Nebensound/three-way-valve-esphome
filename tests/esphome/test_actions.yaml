@@ -1,0 +1,115 @@
+substitutions:
+  device_name: test-actions
+  friendly_name: Test Actions
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    - priority: 600
+      then:
+        - logger.log: "Boot: High priority"
+        - valve.block:
+            id: valve_actions
+    - priority: -100
+      then:
+        - logger.log: "Boot: Low priority"
+        - delay: 2s
+        - valve.open_all:
+            id: valve_actions
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+external_components:
+  - source:
+      type: local
+      path: ../../components
+    components: [three_way_valve]
+
+stepper:
+  - platform: a4988
+    id: my_stepper
+    step_pin: GPIO19
+    dir_pin: GPIO18
+    max_speed: 250 steps/s
+    acceleration: 100 steps/s^2
+    deceleration: 100 steps/s^2
+
+valve:
+  - platform: three_way_valve
+    name: "Valve Actions Test"
+    id: valve_actions
+    stepper: my_stepper
+    gear_ratio: 4.888888889
+    motor_steps_per_rev: 200
+    ports:
+      supply: 1
+      buffer: 2
+      return: 3
+
+# Test all valve actions
+button:
+  - platform: template
+    name: "Standard Open"
+    on_press:
+      - valve.open:
+          id: valve_actions
+      - logger.log: "Executing standard OPEN"
+
+  - platform: template
+    name: "Standard Close"
+    on_press:
+      - valve.close:
+          id: valve_actions
+      - logger.log: "Executing standard CLOSE"
+
+  - platform: template
+    name: "Standard Stop"
+    on_press:
+      - valve.stop:
+          id: valve_actions
+      - logger.log: "Executing standard STOP"
+
+  - platform: template
+    name: "Standard Toggle"
+    on_press:
+      - valve.toggle:
+          id: valve_actions
+      - logger.log: "Executing standard TOGGLE"
+
+  - platform: template
+    name: "Custom Block"
+    on_press:
+      - valve.block:
+          id: valve_actions
+      - logger.log: "Executing custom BLOCK"
+
+  - platform: template
+    name: "Custom Open All"
+    on_press:
+      - valve.open_all:
+          id: valve_actions
+      - logger.log: "Executing custom OPEN_ALL"
+
+# Automation testing
+interval:
+  - interval: 30s
+    then:
+      - logger.log: "Running automated sequence"
+      - valve.close:
+          id: valve_actions
+      - delay: 3s
+      - valve.open:
+          id: valve_actions
+      - delay: 3s
+      - valve.block:
+          id: valve_actions
+      - delay: 3s
+      - valve.open_all:
+          id: valve_actions

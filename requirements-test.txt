@@ -1,0 +1,18 @@
+# Test dependencies for Three-Way Valve ESPHome component
+
+# Core testing framework
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Mocking and fixtures
+pytest-mock>=3.10.0
+
+# ESPHome (if available, for full integration tests)
+# Note: ESPHome may have complex dependencies
+# Uncomment if you want to test against actual ESPHome:
+# esphome>=2023.0.0
+
+# Code quality (optional, for development)
+pytest-flake8>=1.1.0
+pytest-pylint>=0.18.0
+black>=23.0.0

@@ -1,0 +1,100 @@
+substitutions:
+  device_name: test-offsets
+  friendly_name: Test Offsets
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+external_components:
+  - source:
+      type: local
+      path: ../../components
+    components: [three_way_valve]
+
+stepper:
+  - platform: a4988
+    id: stepper1
+    step_pin: GPIO19
+    dir_pin: GPIO18
+    max_speed: 250 steps/s
+
+  - platform: a4988
+    id: stepper2
+    step_pin: GPIO21
+    dir_pin: GPIO22
+    max_speed: 250 steps/s
+
+  - platform: a4988
+    id: stepper3
+    step_pin: GPIO23
+    dir_pin: GPIO25
+    max_speed: 250 steps/s
+
+  - platform: a4988
+    id: stepper4
+    step_pin: GPIO26
+    dir_pin: GPIO27
+    max_speed: 250 steps/s
+
+# Test various offset configurations
+valve:
+  # No offset (default)
+  - platform: three_way_valve
+    name: "Valve No Offset"
+    id: valve_no_offset
+    stepper: stepper1
+    gear_ratio: 4.888888889
+    motor_steps_per_rev: 200
+    ports:
+      supply: 1
+      buffer: 2
+      return: 3
+    position_offset: "0steps"
+
+  # Positive steps offset
+  - platform: three_way_valve
+    name: "Valve +10 Steps"
+    id: valve_plus_steps
+    stepper: stepper2
+    gear_ratio: 4.888888889
+    motor_steps_per_rev: 200
+    ports:
+      supply: 1
+      buffer: 2
+      return: 3
+    position_offset: "10steps"
+
+  # Negative steps offset
+  - platform: three_way_valve
+    name: "Valve -5 Steps"
+    id: valve_minus_steps
+    stepper: stepper3
+    gear_ratio: 4.888888889
+    motor_steps_per_rev: 200
+    ports:
+      supply: 1
+      buffer: 2
+      return: 3
+    position_offset: "-5steps"
+
+  # Degree offset
+  - platform: three_way_valve
+    name: "Valve 45 Degrees"
+    id: valve_degrees
+    stepper: stepper4
+    gear_ratio: 4.888888889
+    motor_steps_per_rev: 200
+    ports:
+      supply: 1
+      buffer: 2
+      return: 3
+    position_offset: "45deg"

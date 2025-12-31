@@ -1,0 +1,108 @@
+substitutions:
+  device_name: test-all-features
+  friendly_name: Test All Features
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    - priority: -100
+      then:
+        - logger.log: "System started"
+        - valve.open_all:
+            id: valve_full
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: "lYOBNNRTF5mJnm0azxCIDP/n3gNq2qaIOAqI/q/f2qY="
+
+ota:
+  - platform: esphome
+    password: "testpassword"
+
+wifi:
+  ssid: "TestSSID"
+  password: "TestPassword"
+
+external_components:
+  - source:
+      type: local
+      path: ../../components
+    components: [three_way_valve]
+
+stepper:
+  - platform: a4988
+    id: my_stepper
+    step_pin: GPIO19
+    dir_pin: GPIO18
+    max_speed: 250 steps/s
+    acceleration: 100 steps/s^2
+    deceleration: 100 steps/s^2
+
+# Full configuration with all features
+valve:
+  - platform: three_way_valve
+    name: "Three Way Valve Full"
+    id: valve_full
+    stepper: my_stepper
+    gear_ratio: 4.888888889
+    motor_steps_per_rev: 200
+    ports:
+      supply: 1
+      buffer: 2
+      return: 3
+    position_offset: "10steps"
+    on_open:
+      - logger.log: "Valve opened"
+    on_closed:
+      - logger.log: "Valve closed"
+
+# Button to test actions
+button:
+  - platform: template
+    name: "Block Valve"
+    on_press:
+      - valve.block:
+          id: valve_full
+      - logger.log: "Valve blocked"
+
+  - platform: template
+    name: "Open All Ports"
+    on_press:
+      - valve.open_all:
+          id: valve_full
+      - logger.log: "All ports opened"
+
+  - platform: template
+    name: "Open Valve"
+    on_press:
+      - valve.open:
+          id: valve_full
+
+  - platform: template
+    name: "Close Valve"
+    on_press:
+      - valve.close:
+          id: valve_full
+
+  - platform: template
+    name: "Toggle Valve"
+    on_press:
+      - valve.toggle:
+          id: valve_full
+
+# Sensor to monitor valve position
+sensor:
+  - platform: template
+    name: "Valve Position"
+    lambda: |-
+      return id(valve_full).position;
+    update_interval: 1s
