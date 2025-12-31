@@ -331,13 +331,13 @@ protected:
 TEST_F(ValveActionsTest, BlockActionCallsParkValve)
 {
   ThreeWayValveBlockAction<> action(&valve);
-  
+
   // Initial position
-  EXPECT_EQ(stepper.target_position, 0);  // Not set yet
-  
+  EXPECT_EQ(stepper.target_position, 0); // Not set yet
+
   // Execute action
   action.play();
-  
+
   // Should move to blocked position
   EXPECT_EQ(stepper.target_position, 0);
 }
@@ -348,13 +348,13 @@ TEST_F(ValveActionsTest, BlockActionCallsParkValve)
 TEST_F(ValveActionsTest, OpenAllActionCallsOpenAllValve)
 {
   ThreeWayValveOpenAllAction<> action(&valve);
-  
+
   // Set different block position first
   valve.set_pos_all_open(-360);
-  
+
   // Execute action
   action.play();
-  
+
   // Should move to all-open position
   EXPECT_EQ(stepper.target_position, -360);
 }
@@ -366,9 +366,9 @@ TEST_F(ValveActionsTest, BlockActionWithCustomPosition)
 {
   valve.set_pos_block(-90);
   ThreeWayValveBlockAction<> action(&valve);
-  
+
   action.play();
-  
+
   EXPECT_EQ(stepper.target_position, -90);
 }
 
@@ -379,9 +379,9 @@ TEST_F(ValveActionsTest, OpenAllActionWithCustomPosition)
 {
   valve.set_pos_all_open(-270);
   ThreeWayValveOpenAllAction<> action(&valve);
-  
+
   action.play();
-  
+
   EXPECT_EQ(stepper.target_position, -270);
 }
 
@@ -391,10 +391,10 @@ TEST_F(ValveActionsTest, OpenAllActionWithCustomPosition)
 TEST_F(ValveActionsTest, ActionWithTemplateParameters)
 {
   ThreeWayValveBlockAction<int, float> action(&valve);
-  
+
   // Should compile and execute without using parameters
   action.play(42, 3.14f);
-  
+
   EXPECT_EQ(stepper.target_position, 0);
 }
 
