@@ -8,13 +8,37 @@ from types import ModuleType
 class Invalid(Exception):
     pass
 
-# Create a proper mock module for config_validation
+# Create a proper mock module for config_validation first
 mock_cv = ModuleType('esphome.config_validation')
 mock_cv.Invalid = Invalid
+
+# Add float_range mock
+def mock_float_range(min=None, max=None):
+    def validator(value):
+        v = float(value)
+        if min is not None and v < min:
+            raise Invalid(f"Value {v} is less than minimum {min}")
+        if max is not None and v > max:
+            raise Invalid(f"Value {v} is greater than maximum {max}")
+        return v
+    return validator
+
+def mock_one_of(*values, **kwargs):
+    def validator(value):
+        if kwargs.get('lower'):
+            value = value.lower()
+        if value not in values:
+            raise Invalid(f"Value {value} not in {values}")
+        return value
+    return validator
+
+# Add functions to mock module
 mock_cv.string = lambda value: str(value)
 mock_cv.int_ = lambda value: int(value)
 mock_cv.float_ = lambda value: float(value)
 mock_cv.All = lambda *validators: lambda value: value
+mock_cv.float_range = mock_float_range
+mock_cv.one_of = mock_one_of
 # Add more cv functions needed by the component
 mock_cv.GenerateID = lambda: 'generate_id'
 mock_cv.declare_id = lambda cls: lambda value: value
@@ -66,8 +90,12 @@ spec.loader.exec_module(three_way_valve_init)
 
 validate_offset = three_way_valve_init.validate_offset
 validate_ports = three_way_valve_init.validate_ports
+validate_mixer_curve = three_way_valve_init.validate_mixer_curve
+validate_curve_point = three_way_valve_init.validate_curve_point
 PORT_FUNCTIONS = three_way_valve_init.PORT_FUNCTIONS
 ANGLE_MAPPING = three_way_valve_init.ANGLE_MAPPING
+MIXER_CURVES = three_way_valve_init.MIXER_CURVES
+CONF_MIXER_CURVE = three_way_valve_init.CONF_MIXER_CURVE
 
 
 class TestValidateOffset:
@@ -301,5 +329,206 @@ class TestEdgeCases:
         assert result == {"supply": 1, "buffer": 2, "return": 3}
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+class TestMixerCurveValidation:
+    """Test suite for mixer_curve validation."""
+
+    def test_predefined_curve_evenes_easyflow(self):
+        """Test predefined 'evenes easyflow' curve type."""
+        result = validate_mixer_curve("evenes easyflow")
+        assert result['type'] == 'evenes easyflow'
+        assert len(result['points']) == 11
+        assert result['points'][0] == (0.0, 0.0)
+        assert result['points'][-1] == (1.0, 1.0)
+
+    def test_predefined_curve_linear(self):
+        """Test predefined 'linear' curve type."""
+        result = validate_mixer_curve("linear")
+        assert result['type'] == 'linear'
+        assert len(result['points']) == 2
+        assert result['points'] == [(0.0, 0.0), (1.0, 1.0)]
+
+    def test_predefined_curve_case_insensitive(self):
+        """Test that predefined curve types are case insensitive."""
+        result1 = validate_mixer_curve("LINEAR")
+        result2 = validate_mixer_curve("Linear")
+        result3 = validate_mixer_curve("  linear  ")
+        assert result1['type'] == 'linear'
+        assert result2['type'] == 'linear'
+        assert result3['type'] == 'linear'
+
+    def test_unknown_predefined_curve(self):
+        """Test that unknown curve type raises error."""
+        with pytest.raises(Invalid) as exc_info:
+            validate_mixer_curve("unknown")
+        assert "Unknown mixer curve type" in str(exc_info.value)
+        assert "'evenes easyflow'" in str(exc_info.value)
+        assert "'linear'" in str(exc_info.value)
+
+    def test_valid_custom_curve_list_notation(self):
+        """Test valid custom mixer curve with list notation."""
+        curve = [
+            [0.0, 0.0],
+            [0.5, 0.3],
+            [1.0, 1.0]
+        ]
+        result = validate_mixer_curve(curve)
+        assert result['type'] == 'custom'
+        assert result['points'] == [(0.0, 0.0), (0.5, 0.3), (1.0, 1.0)]
+
+    def test_valid_custom_curve_dict_flow_position_notation(self):
+        """Test valid custom curve with dict flow/position notation."""
+        curve = [
+            {'flow': 0.0, 'position': 0.0},
+            {'flow': 0.5, 'position': 0.3},
+            {'flow': 1.0, 'position': 1.0}
+        ]
+        result = validate_mixer_curve(curve)
+        assert result['type'] == 'custom'
+        assert result['points'] == [(0.0, 0.0), (0.5, 0.3), (1.0, 1.0)]
+
+    def test_valid_custom_curve_dict_xy_notation(self):
+        """Test valid custom curve with dict x/y notation."""
+        curve = [
+            {'x': 0.0, 'y': 0.0},
+            {'x': 0.5, 'y': 0.3},
+            {'x': 1.0, 'y': 1.0}
+        ]
+        result = validate_mixer_curve(curve)
+        assert result['type'] == 'custom'
+        assert result['points'] == [(0.0, 0.0), (0.5, 0.3), (1.0, 1.0)]
+
+    def test_custom_curve_must_have_at_least_two_points(self):
+        """Test that curve with less than 2 points raises error."""
+        with pytest.raises(Invalid) as exc_info:
+            validate_mixer_curve([(0.0, 0.0)])
+        assert "at least 2 points" in str(exc_info.value)
+
+    def test_custom_curve_must_start_at_zero(self):
+        """Test that curve must start at flow=0.0."""
+        curve = [[0.1, 0.0], [1.0, 1.0]]
+        with pytest.raises(Invalid) as exc_info:
+            validate_mixer_curve(curve)
+        assert "start at flow=0.0" in str(exc_info.value)
+
+    def test_custom_curve_must_end_at_one(self):
+        """Test that curve must end at flow=1.0."""
+        curve = [[0.0, 0.0], [0.9, 0.9]]
+        with pytest.raises(Invalid) as exc_info:
+            validate_mixer_curve(curve)
+        assert "end at flow=1.0" in str(exc_info.value)
+
+    def test_custom_curve_points_must_be_sorted(self):
+        """Test that curve points must be sorted by flow value."""
+        curve = [[0.0, 0.0], [1.0, 1.0], [0.5, 0.5]]  # Out of order
+        with pytest.raises(Invalid) as exc_info:
+            validate_mixer_curve(curve)
+        assert "sorted by flow value" in str(exc_info.value)
+
+    def test_custom_curve_duplicate_flow_values(self):
+        """Test that duplicate flow values are rejected."""
+        curve = [[0.0, 0.0], [0.5, 0.3], [0.5, 0.4], [1.0, 1.0]]
+        with pytest.raises(Invalid) as exc_info:
+            validate_mixer_curve(curve)
+        assert "sorted by flow value" in str(exc_info.value)
+
+    def test_custom_curve_flow_values_out_of_range(self):
+        """Test that flow values outside 0-1 range are rejected."""
+        curve = [[0.0, 0.0], [1.5, 0.5]]
+        with pytest.raises(Invalid):
+            validate_mixer_curve(curve)
+
+    def test_custom_curve_position_values_out_of_range(self):
+        """Test that position values outside 0-1 range are rejected."""
+        curve = [[0.0, -0.1], [0.5, 0.5], [1.0, 1.0]]
+        with pytest.raises(Invalid):
+            validate_mixer_curve(curve)
+
+    def test_custom_curve_invalid_point_format(self):
+        """Test that invalid point format is rejected."""
+        curve = [[0.0, 0.0], [0.5], [1.0, 1.0]]  # Second point has only one value
+        with pytest.raises(Invalid) as exc_info:
+            validate_mixer_curve(curve)
+        assert "must be a list" in str(exc_info.value) or "must have" in str(exc_info.value)
+
+    def test_predefined_curves_exist(self):
+        """Test that predefined mixer curves are properly defined."""
+        assert 'evenes easyflow' in MIXER_CURVES
+        assert 'linear' in MIXER_CURVES
+        
+        # Validate evenes easyflow curve
+        evenes_curve = MIXER_CURVES['evenes easyflow']
+        assert len(evenes_curve) == 11
+        assert evenes_curve[0] == (0.0, 0.0)
+        assert evenes_curve[-1] == (1.0, 1.0)
+        
+        # Validate linear curve
+        linear_curve = MIXER_CURVES['linear']
+        assert len(linear_curve) == 2
+        assert linear_curve[0] == (0.0, 0.0)
+        assert linear_curve[-1] == (1.0, 1.0)
+
+
+class TestCurvePointValidation:
+    """Test suite for individual curve point validation."""
+
+    def test_valid_list_point(self):
+        """Test valid point as list."""
+        result = validate_curve_point([0.5, 0.3])
+        assert result == (0.5, 0.3)
+
+    def test_valid_dict_flow_position_point(self):
+        """Test valid point as dict with flow/position."""
+        result = validate_curve_point({'flow': 0.5, 'position': 0.3})
+        assert result == (0.5, 0.3)
+
+    def test_valid_dict_xy_point(self):
+        """Test valid point as dict with x/y."""
+        result = validate_curve_point({'x': 0.5, 'y': 0.3})
+        assert result == (0.5, 0.3)
+
+    def test_dict_missing_flow_key(self):
+        """Test dict point missing flow key (when using flow/position notation)."""
+        with pytest.raises(Invalid) as exc_info:
+            validate_curve_point({'position': 0.3})
+        assert "must have either" in str(exc_info.value)
+
+    def test_dict_missing_x_key(self):
+        """Test dict point missing x key (when using x/y notation)."""
+        with pytest.raises(Invalid) as exc_info:
+            validate_curve_point({'y': 0.3})
+        assert "must have either" in str(exc_info.value)
+
+    def test_dict_mixed_notations(self):
+        """Test dict point with mixed notations."""
+        with pytest.raises(Invalid) as exc_info:
+            validate_curve_point({'flow': 0.5, 'y': 0.3})
+        assert "must have either" in str(exc_info.value)
+
+    def test_list_wrong_length(self):
+        """Test list with wrong number of elements."""
+        with pytest.raises(Invalid):
+            validate_curve_point([0.5])
+        with pytest.raises(Invalid):
+            validate_curve_point([0.5, 0.3, 0.1])
+
+    def test_invalid_type(self):
+        """Test invalid point type."""
+        with pytest.raises(Invalid) as exc_info:
+            validate_curve_point("not a point")
+        assert "must be a list" in str(exc_info.value) or "dict" in str(exc_info.value)
+
+
+class TestValveTypeConfiguration:
+    """Test suite for backward compatibility and integration."""
+
+    def test_string_curve_types_work(self):
+        """Test that string curve types work correctly."""
+        linear = validate_mixer_curve("linear")
+        evenes = validate_mixer_curve("evenes easyflow")
+        
+        assert linear['type'] == 'linear'
+        assert evenes['type'] == 'evenes easyflow'
+        assert isinstance(linear['points'], list)
+        assert isinstance(evenes['points'], list)
+
+

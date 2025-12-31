@@ -12,7 +12,7 @@ namespace esphome
       if (flow > 1.0f)
         flow = 1.0f;
 
-      float position = get_pos(flow, mixer_curve);
+      float position = this->get_pos(flow);
       const int32_t target = int32_t(this->pos_closed_ +
                                      position * (this->pos_open_ - this->pos_closed_));
       this->stepper_->set_target(target);
@@ -37,7 +37,7 @@ namespace esphome
       else if (position > 1.0f)
         position = 1.0f;
 
-      return get_flow(position, mixer_curve);
+      return this->get_flow(position);
     }
 
     void ThreeWayValve::park_valve()

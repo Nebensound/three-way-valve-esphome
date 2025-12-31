@@ -18,59 +18,6 @@ namespace esphome
       float y;
     };
 
-    constexpr CurvePoint mixer_curve[] = {
-        {0.0f, 0.0f},
-        {0.1f, 0.01f},
-        {0.2f, 0.1f},
-        {0.3f, 0.2f},
-        {0.4f, 0.3f},
-        {0.5f, 0.5f},
-        {0.6f, 0.7f},
-        {0.7f, 0.8f},
-        {0.8f, 0.9f},
-        {0.9f, 0.99f},
-        {1.0f, 1.0f}};
-
-    template <size_t N>
-    float get_flow(float x, const CurvePoint (&curve)[N])
-    {
-      if (x <= curve[0].x)
-        return curve[0].y;
-      if (x >= curve[N - 1].x)
-        return curve[N - 1].y;
-      for (size_t i = 0; i < N - 1; ++i)
-      {
-        float x0 = curve[i].x, x1 = curve[i + 1].x;
-        float y0 = curve[i].y, y1 = curve[i + 1].y;
-        if (x >= x0 && x <= x1)
-        {
-          float t = (x - x0) / (x1 - x0);
-          return y0 + t * (y1 - y0);
-        }
-      }
-      return curve[N - 1].y;
-    }
-
-    template <size_t N>
-    float get_pos(float y, const CurvePoint (&curve)[N])
-    {
-      if (y <= curve[0].y)
-        return curve[0].x;
-      if (y >= curve[N - 1].y)
-        return curve[N - 1].x;
-      for (size_t i = 0; i < N - 1; ++i)
-      {
-        float y0 = curve[i].y, y1 = curve[i + 1].y;
-        float x0 = curve[i].x, x1 = curve[i + 1].x;
-        if (y >= y0 && y <= y1)
-        {
-          float t = (y - y0) / (y1 - y0);
-          return x0 + t * (x1 - x0);
-        }
-      }
-      return curve[N - 1].x;
-    }
-
     class ThreeWayValve : public valve::Valve, public Component
     {
     public:
@@ -85,6 +32,12 @@ namespace esphome
       void set_pos_open(int32_t p) { this->pos_open_ = p; }
       void set_pos_block(int32_t p) { this->pos_block_ = p; }
       void set_pos_all_open(int32_t p) { this->pos_all_open_ = p; }
+
+      // Curve management
+      void add_curve_point(float flow, float position)
+      {
+        this->mixer_curve_.push_back({flow, position});
+      }
 
       void setup() override {}
 
@@ -101,6 +54,50 @@ namespace esphome
 
     protected:
       Stepper *stepper_{nullptr};
+      std::vector<CurvePoint> mixer_curve_;
+
+      // Helper methods for curve interpolation
+      float get_flow(float x) const
+      {
+        if (this->mixer_curve_.empty())
+          return x; // Fallback to linear if no curve set
+        if (x <= this->mixer_curve_[0].x)
+          return this->mixer_curve_[0].y;
+        if (x >= this->mixer_curve_.back().x)
+          return this->mixer_curve_.back().y;
+        for (size_t i = 0; i < this->mixer_curve_.size() - 1; ++i)
+        {
+          float x0 = this->mixer_curve_[i].x, x1 = this->mixer_curve_[i + 1].x;
+          float y0 = this->mixer_curve_[i].y, y1 = this->mixer_curve_[i + 1].y;
+          if (x >= x0 && x <= x1)
+          {
+            float t = (x - x0) / (x1 - x0);
+            return y0 + t * (y1 - y0);
+          }
+        }
+        return this->mixer_curve_.back().y;
+      }
+
+      float get_pos(float y) const
+      {
+        if (this->mixer_curve_.empty())
+          return y; // Fallback to linear if no curve set
+        if (y <= this->mixer_curve_[0].y)
+          return this->mixer_curve_[0].x;
+        if (y >= this->mixer_curve_.back().y)
+          return this->mixer_curve_.back().x;
+        for (size_t i = 0; i < this->mixer_curve_.size() - 1; ++i)
+        {
+          float y0 = this->mixer_curve_[i].y, y1 = this->mixer_curve_[i + 1].y;
+          float x0 = this->mixer_curve_[i].x, x1 = this->mixer_curve_[i + 1].x;
+          if (y >= y0 && y <= y1)
+          {
+            float t = (y - y0) / (y1 - y0);
+            return x0 + t * (x1 - x0);
+          }
+        }
+        return this->mixer_curve_.back().x;
+      }
     };
 
     // Custom actions for three-way valve control
