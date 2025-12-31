@@ -8,12 +8,12 @@ Add this external component to your ESPHome configuration:
 
 ```yaml
 external_components:
-  - source: github://Nebensound/three_way_valve-esphome
+  - source: github://Nebensound/three-way-valve-esphome
     components: [ three_way_valve ]
 ```
 
 > [!TIP]
-> To use a specific branch or tag, add it after `@`: `github://Nebensound/three_way_valve-esphome@main` or `github://Nebensound/three_way_valve-esphome@v1.0.0`
+> To use a specific branch or tag, add it after `@`: `github://Nebensound/three-way-valve-esphome@main` or `github://Nebensound/three-way-valve-esphome@v1.0.0`
 
 ## Configuration
 
