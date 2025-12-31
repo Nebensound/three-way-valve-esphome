@@ -88,7 +88,7 @@ spec = importlib.util.spec_from_file_location(
 three_way_valve_init = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(three_way_valve_init)
 
-validate_offset = three_way_valve_init.validate_offset
+validate_position_offset = three_way_valve_init.validate_position_offset
 validate_ports = three_way_valve_init.validate_ports
 validate_mixer_curve = three_way_valve_init.validate_mixer_curve
 validate_curve_point = three_way_valve_init.validate_curve_point
@@ -98,71 +98,168 @@ MIXER_CURVES = three_way_valve_init.MIXER_CURVES
 CONF_MIXER_CURVE = three_way_valve_init.CONF_MIXER_CURVE
 
 
-class TestValidateOffset:
-    """Test suite for validate_offset function."""
+class TestValidatePositionOffset:
+    """Test suite for validate_position_offset function."""
 
+    # STEPS unit tests
     def test_valid_steps_positive(self):
         """Test valid positive steps offset."""
-        result = validate_offset("10steps")
-        assert result == {"type": "steps", "value": 10.0}
+        result = validate_position_offset("10steps")
+        assert result == {"unit": "STEPS", "value": 10.0}
 
     def test_valid_steps_negative(self):
         """Test valid negative steps offset."""
-        result = validate_offset("-7steps")
-        assert result == {"type": "steps", "value": -7.0}
+        result = validate_position_offset("-7steps")
+        assert result == {"unit": "STEPS", "value": -7.0}
 
     def test_valid_steps_with_spaces(self):
         """Test valid steps offset with spaces."""
-        result = validate_offset("  10 steps  ")
-        assert result == {"type": "steps", "value": 10.0}
-
-    def test_valid_degrees_positive(self):
-        """Test valid positive degrees offset."""
-        result = validate_offset("45.5deg")
-        assert result == {"type": "deg", "value": 45.5}
-
-    def test_valid_degrees_negative(self):
-        """Test valid negative degrees offset."""
-        result = validate_offset("-90deg")
-        assert result == {"type": "deg", "value": -90.0}
-
-    def test_valid_degree_singular(self):
-        """Test 'degree' singular form."""
-        result = validate_offset("1degree")
-        assert result == {"type": "deg", "value": 1.0}
-
-    def test_valid_degrees_plural(self):
-        """Test 'degrees' plural form."""
-        result = validate_offset("180degrees")
-        assert result == {"type": "deg", "value": 180.0}
-
-    def test_zero_offset(self):
-        """Test zero offset."""
-        result = validate_offset("0steps")
-        assert result == {"type": "steps", "value": 0.0}
+        result = validate_position_offset("  10 steps  ")
+        assert result == {"unit": "STEPS", "value": 10.0}
+    
+    def test_valid_step_singular(self):
+        """Test 'step' singular form."""
+        result = validate_position_offset("1step")
+        assert result == {"unit": "STEPS", "value": 1.0}
 
     def test_float_steps(self):
         """Test fractional steps offset."""
-        result = validate_offset("3.14159steps")
-        assert result == {"type": "steps", "value": 3.14159}
+        result = validate_position_offset("3.14159steps")
+        assert result == {"unit": "STEPS", "value": 3.14159}
+
+    # DEGREES unit tests
+    def test_valid_degrees_positive(self):
+        """Test valid positive degrees offset."""
+        result = validate_position_offset("45.5deg")
+        assert result == {"unit": "DEGREES", "value": 45.5}
+
+    def test_valid_degrees_negative(self):
+        """Test valid negative degrees offset."""
+        result = validate_position_offset("-90deg")
+        assert result == {"unit": "DEGREES", "value": -90.0}
+
+    def test_valid_degree_singular(self):
+        """Test 'degree' singular form."""
+        result = validate_position_offset("1degree")
+        assert result == {"unit": "DEGREES", "value": 1.0}
+
+    def test_valid_degrees_plural(self):
+        """Test 'degrees' plural form."""
+        result = validate_position_offset("180degrees")
+        assert result == {"unit": "DEGREES", "value": 180.0}
+    
+    def test_valid_degrees_symbol(self):
+        """Test degrees with ° symbol."""
+        result = validate_position_offset("90°")
+        assert result == {"unit": "DEGREES", "value": 90.0}
+
+    # REVOLUTIONS unit tests
+    def test_valid_revolutions(self):
+        """Test revolutions unit."""
+        result = validate_position_offset("2.5revolutions")
+        assert result == {"unit": "REVOLUTIONS", "value": 2.5}
+    
+    def test_valid_revolution_singular(self):
+        """Test 'revolution' singular form."""
+        result = validate_position_offset("1revolution")
+        assert result == {"unit": "REVOLUTIONS", "value": 1.0}
+    
+    def test_valid_rev_short(self):
+        """Test 'rev' short form."""
+        result = validate_position_offset("0.5rev")
+        assert result == {"unit": "REVOLUTIONS", "value": 0.5}
+
+    # RADIANS unit tests
+    def test_valid_radians(self):
+        """Test radians unit."""
+        result = validate_position_offset("3.14159radians")
+        assert result == {"unit": "RADIANS", "value": 3.14159}
+    
+    def test_valid_radian_singular(self):
+        """Test 'radian' singular form."""
+        result = validate_position_offset("1radian")
+        assert result == {"unit": "RADIANS", "value": 1.0}
+    
+    def test_valid_rad_short(self):
+        """Test 'rad' short form."""
+        result = validate_position_offset("1.57rad")
+        assert result == {"unit": "RADIANS", "value": 1.57}
+
+    # ARCMINUTES unit tests
+    def test_valid_arcminutes(self):
+        """Test arcminutes unit."""
+        result = validate_position_offset("60arcminutes")
+        assert result == {"unit": "ARCMINUTES", "value": 60.0}
+    
+    def test_valid_arcminute_singular(self):
+        """Test 'arcminute' singular form."""
+        result = validate_position_offset("1arcminute")
+        assert result == {"unit": "ARCMINUTES", "value": 1.0}
+    
+    def test_valid_arcmin_short(self):
+        """Test 'arcmin' short form."""
+        result = validate_position_offset("30arcmin")
+        assert result == {"unit": "ARCMINUTES", "value": 30.0}
+    
+    def test_valid_amin_short(self):
+        """Test 'amin' short form."""
+        result = validate_position_offset("45amin")
+        assert result == {"unit": "ARCMINUTES", "value": 45.0}
+    
+    def test_valid_arcminutes_apostrophe(self):
+        """Test arcminutes with ' symbol."""
+        result = validate_position_offset("90'")
+        assert result == {"unit": "ARCMINUTES", "value": 90.0}
+
+    # ARCSECONDS unit tests
+    def test_valid_arcseconds(self):
+        """Test arcseconds unit."""
+        result = validate_position_offset("3600arcseconds")
+        assert result == {"unit": "ARCSECONDS", "value": 3600.0}
+    
+    def test_valid_arcsecond_singular(self):
+        """Test 'arcsecond' singular form."""
+        result = validate_position_offset("1arcsecond")
+        assert result == {"unit": "ARCSECONDS", "value": 1.0}
+    
+    def test_valid_arcsec_short(self):
+        """Test 'arcsec' short form."""
+        result = validate_position_offset("1800arcsec")
+        assert result == {"unit": "ARCSECONDS", "value": 1800.0}
+    
+    def test_valid_asec_short(self):
+        """Test 'asec' short form."""
+        result = validate_position_offset("900asec")
+        assert result == {"unit": "ARCSECONDS", "value": 900.0}
+    
+    def test_valid_arcseconds_quote(self):
+        """Test arcseconds with \" symbol."""
+        result = validate_position_offset('3600"')
+        assert result == {"unit": "ARCSECONDS", "value": 3600.0}
+
+    # General tests
+    def test_zero_offset(self):
+        """Test zero offset."""
+        result = validate_position_offset("0steps")
+        assert result == {"unit": "STEPS", "value": 0.0}
 
     def test_invalid_unit(self):
         """Test invalid unit suffix."""
         with pytest.raises(Invalid) as excinfo:
-            validate_offset("10meters")
-        assert "must end with one of" in str(excinfo.value)
+            validate_position_offset("10meters")
+        assert "must end with a valid unit" in str(excinfo.value)
 
     def test_invalid_number(self):
         """Test invalid number format."""
         with pytest.raises(Invalid) as excinfo:
-            validate_offset("abcsteps")
+            validate_position_offset("abcsteps")
         assert "Invalid number" in str(excinfo.value)
 
     def test_no_unit(self):
         """Test offset without unit."""
         with pytest.raises(Invalid) as excinfo:
-            validate_offset("10")
-        assert "must end with one of" in str(excinfo.value)
+            validate_position_offset("10")
+        assert "must end with a valid unit" in str(excinfo.value)
 
 
 class TestValidatePorts:
@@ -309,18 +406,18 @@ class TestEdgeCases:
 
     def test_very_large_offset(self):
         """Test very large offset values."""
-        result = validate_offset("999999steps")
-        assert result == {"type": "steps", "value": 999999.0}
+        result = validate_position_offset("999999steps")
+        assert result == {"unit": "STEPS", "value": 999999.0}
 
     def test_very_small_negative_offset(self):
         """Test very small negative offset."""
-        result = validate_offset("-0.0001deg")
-        assert result == {"type": "deg", "value": -0.0001}
+        result = validate_position_offset("-0.0001deg")
+        assert result == {"unit": "DEGREES", "value": -0.0001}
 
     def test_scientific_notation_offset(self):
         """Test offset with scientific notation."""
-        result = validate_offset("1.5e2steps")
-        assert result == {"type": "steps", "value": 150.0}
+        result = validate_position_offset("1.5e2steps")
+        assert result == {"unit": "STEPS", "value": 150.0}
 
     def test_ports_as_strings(self):
         """Test ports given as string numbers."""

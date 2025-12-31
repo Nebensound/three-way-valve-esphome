@@ -23,7 +23,6 @@ valve:
     name: "Three Way Valve"
     stepper: my_stepper
     gear_ratio: 4.888888889  # 44/9
-    motor_steps_per_rev: 200
     ports:
       supply: 1
       buffer: 2
@@ -40,7 +39,6 @@ valve:
     name: "Three Way Valve"
     stepper: my_stepper
     gear_ratio: 4.888888889
-    motor_steps_per_rev: 200
     ports:
       supply: 1
       buffer: 2
@@ -56,7 +54,6 @@ valve:
     name: "Three Way Valve"
     stepper: my_stepper
     gear_ratio: 4.888888889
-    motor_steps_per_rev: 200
     ports:
       supply: 1
       buffer: 2
@@ -95,12 +92,23 @@ mixer_curve:
 - **name** (*Optional*, [string](https://esphome.io/guides/configuration-types.html#config-string)): The name of the valve. At least one of `id` or `name` must be specified.
 - **stepper** (**Required**, [ID](https://esphome.io/guides/configuration-types.html#config-id)): The ID of the stepper motor to use for valve actuation. Must reference a `stepper` component.
 - **gear_ratio** (*Optional*, [float](https://esphome.io/guides/configuration-types.html#config-float)): The gear ratio of the valve mechanism. This is the ratio of motor revolutions to valve revolutions. Defaults to 1.0 (direct drive).
-- **motor_steps_per_rev** (**Required**, [int](https://esphome.io/guides/configuration-types.html#config-int)): Number of motor steps per full revolution of the motor.
+- **motor_steps_per_rev** (*Optional*, [int](https://esphome.io/guides/configuration-types.html#config-int)): Number of motor steps per full revolution of the motor. Only required when `position_offset` uses `steps` unit. For other offset units (rev, deg, rad, arcmin, arcsec), this parameter is optional.
 - **ports** (**Required**, object): Port configuration for the valve with explicit mapping of port numbers from hardware manual to their functions:
   - **supply** (**Required**, [int](https://esphome.io/guides/configuration-types.html#config-int)): The port number for the supply line (labeled in hardware manual).
   - **buffer** (**Required**, [int](https://esphome.io/guides/configuration-types.html#config-int)): The port number for the buffer line (labeled in hardware manual).
   - **return** (**Required**, [int](https://esphome.io/guides/configuration-types.html#config-int)): The port number for the return line (labeled in hardware manual).
-- **position_offset** (*Optional*, [string](https://esphome.io/guides/configuration-types.html#config-string)): Offset to apply to valve position. Accepts values with units like `"10steps"`, `"-7.5deg"`. Default: `"0steps"`.
+- **position_offset** (*Optional*, [string](https://esphome.io/guides/configuration-types.html#config-string)): Offset to apply to valve position with unit. Default: `"0steps"`.
+  
+  **Supported units** (based on [servoxxd](https://github.com/Nebensound/servoxxd-esphome)):
+  - **Steps:** `steps`, `step` - Direct motor steps (requires `motor_steps_per_rev`)
+  - **Revolutions:** `rev`, `revolutions`, `revolution` - Full motor rotations
+  - **Degrees:** `deg`, `degrees`, `degree`, `°` - Angular position
+  - **Radians:** `rad`, `radians`, `radian` - Angular position in radians
+  - **Arcminutes:** `arcmin`, `arcminute`, `arcminutes`, `'`, `amin` - 1° = 60 arcminutes
+  - **Arcseconds:** `arcsec`, `arcsecond`, `arcseconds`, `"`, `asec` - 1° = 3600 arcseconds
+  
+  Examples: `"10steps"`, `"0.5rev"`, `"45deg"`, `"1.57rad"`, `"60arcmin"`, `"3600arcsec"`
+
 - **mixer_curve** (*Optional*, string or list): Defines how flow values (0.0-1.0) map to valve positions (0.0-1.0). Can be either:
   
   **Predefined types** (string):

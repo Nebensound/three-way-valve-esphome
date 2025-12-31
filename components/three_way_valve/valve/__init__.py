@@ -18,29 +18,43 @@ CONF_PORTS = 'ports'
 CONF_POSITION_OFFSET = 'position_offset'
 CONF_MIXER_CURVE = 'mixer_curve'
 
-def validate_offset(value):
-    """Validate position offset (e.g. '10steps', '-7.5deg')."""
-    value = cv.string(value).replace(" ", "")
-    allowed_types = {
-        "steps": "steps",
-        "deg": "deg",
-        "degree": "deg",
-        "degrees": "deg",
+def validate_position_offset(value):
+    """Validate position offset with unit (like servoxxd).
+    
+    Supports units: steps, rev/revolutions, deg/degrees, rad/radians, 
+    arcmin/arcminutes, arcsec/arcseconds
+    
+    Returns: {"value": float, "unit": str}
+    Example: "10steps" -> {"value": 10.0, "unit": "STEPS"}
+    """
+    value_str = cv.string(value).strip()
+    
+    # Parse unit suffixes (based on servoxxd implementation)
+    unit_map = {
+        ("steps", "step"): "STEPS",
+        ("rev", "revolutions", "revolution"): "REVOLUTIONS",
+        ("deg", "degrees", "degree", "°"): "DEGREES",
+        ("rad", "radians", "radian"): "RADIANS",
+        ("arcmin", "arcminute", "arcminutes", "'", "amin"): "ARCMINUTES",
+        ("arcsec", "arcsecond", "arcseconds", '"', "asec"): "ARCSECONDS",
     }
-    matched = None
-    for key in allowed_types:
-        if value.endswith(key):
-            try:
-                num = float(value[:-len(key)])
-            except ValueError:
-                raise cv.Invalid(f"Invalid number for offset: {value}")
-            matched = allowed_types[key]
-            break
-    if matched is None:
-        raise cv.Invalid(
-            "Position offset must end with one of: steps, deg, degree(s). Example: 10steps or -7.5deg"
-        )
-    return {"type": matched, "value": num}
+    
+    for suffixes, unit_type in unit_map.items():
+        for suffix in suffixes:
+            if value_str.lower().endswith(suffix.lower()):
+                value_part = value_str[:-len(suffix)].strip()
+                try:
+                    val = float(value_part)
+                except ValueError:
+                    raise cv.Invalid(f"Invalid number for offset: {value}")
+                return {"value": val, "unit": unit_type}
+    
+    raise cv.Invalid(
+        f"Position offset must end with a valid unit. "
+        f"Supported units: steps, rev/revolutions, deg/degrees/°, "
+        f"rad/radians, arcmin/arcminutes/', arcsec/arcseconds/\". "
+        f"Example: 10steps, 0.5rev, 45deg, 1.57rad, 60arcmin, 3600arcsec"
+    )
 
 def validate_ports(value):
     """
@@ -151,9 +165,9 @@ CONFIG_SCHEMA = valve.valve_schema(ThreeWayValve).extend({
     cv.GenerateID(): cv.declare_id(ThreeWayValve),
     cv.Required(CONF_STEPPER): cv.use_id(stepper.Stepper),
     cv.Required(CONF_GEAR_RATIO): cv.float_,
-    cv.Required(CONF_MOTOR_STEPS_PER_REV): cv.int_,
+    cv.Optional(CONF_MOTOR_STEPS_PER_REV): cv.int_,
     cv.Required(CONF_PORTS): cv.All(ensure_dict, validate_ports),
-    cv.Optional(CONF_POSITION_OFFSET, default='0steps'): validate_offset,
+    cv.Optional(CONF_POSITION_OFFSET, default='0steps'): validate_position_offset,
     cv.Optional(CONF_MIXER_CURVE, default='evenes easyflow'): validate_mixer_curve,
 }).extend(cv.COMPONENT_SCHEMA)
 
@@ -208,13 +222,46 @@ async def to_code(config):
             + "\n\nPlease use one of the supported assignments matching your valve's labeling."
         )
 
-    steps_per_deg = - config[CONF_MOTOR_STEPS_PER_REV] * config[CONF_GEAR_RATIO] / 360.0
+    # Calculate motor_steps_per_rev - required for offset unit conversion
+    if CONF_MOTOR_STEPS_PER_REV not in config:
+        # Check if offset unit is STEPS - if so, motor_steps_per_rev is required
+        offset_obj = config[CONF_POSITION_OFFSET]
+        if offset_obj["unit"] == "STEPS":
+            raise cv.Invalid(
+                f"motor_steps_per_rev is required when position_offset unit is 'steps'. "
+                f"Please specify motor_steps_per_rev or use a different unit (rev, deg, rad, arcmin, arcsec)."
+            )
+        # For other units, we can calculate from gear_ratio assuming 200 steps/rev base motor
+        motor_steps_per_rev = 200
+    else:
+        motor_steps_per_rev = config[CONF_MOTOR_STEPS_PER_REV]
+    
+    steps_per_deg = - motor_steps_per_rev * config[CONF_GEAR_RATIO] / 360.0
 
-    # Offset (validated and robust)
+    # Offset - convert from specified unit to steps (based on servoxxd)
     offset_obj = config[CONF_POSITION_OFFSET]
     val = offset_obj["value"]
-    unit = offset_obj["type"]
-    off_steps = int(val * steps_per_deg) if unit == "deg" else int(val)
+    unit = offset_obj["unit"]
+    
+    # Convert offset to steps based on unit
+    import math
+    if unit == "STEPS":
+        off_steps = int(val)
+    elif unit == "REVOLUTIONS":
+        off_steps = int(val * motor_steps_per_rev * config[CONF_GEAR_RATIO])
+    elif unit == "DEGREES":
+        off_steps = int(val * steps_per_deg)
+    elif unit == "RADIANS":
+        # 1 revolution = 2π radians
+        off_steps = int((val / (2 * math.pi)) * motor_steps_per_rev * config[CONF_GEAR_RATIO])
+    elif unit == "ARCMINUTES":
+        # 21600 arcminutes = 360 degrees
+        off_steps = int((val / 21600.0) * 360.0 * steps_per_deg)
+    elif unit == "ARCSECONDS":
+        # 1296000 arcseconds = 360 degrees
+        off_steps = int((val / 1296000.0) * 360.0 * steps_per_deg)
+    else:
+        raise cv.Invalid(f"Unknown unit type: {unit}")
 
     cg.add(var.set_pos_closed(int(angles['closed'] * steps_per_deg) + off_steps))
     cg.add(var.set_pos_open(int(angles['open'] * steps_per_deg) + off_steps))
